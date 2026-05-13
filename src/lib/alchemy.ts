@@ -249,12 +249,18 @@ export async function fetchQuote(params: {
 }): Promise<AlchemyQuote> {
   const url = new URL('/open/api/v4/merchant/order/quote', config.ALCHEMY_PAY_BASE_URL);
 
+  // Field naming gotcha: Alchemy's hosted-ramp URL takes `fiatAmount`, but
+  // the merchant API `/order/quote` endpoint takes `amount` (string). We
+  // pass both to be defensive — Alchemy ignores unknown keys, but the
+  // version-of-the-week shifts which key is canonical.
   const requestBody = {
     crypto: params.crypto,
     network: params.network,
     fiat: params.fiat,
+    amount: params.fiatAmount,
     fiatAmount: params.fiatAmount,
     side: 'BUY',
+    type: 'BUY',
     ...(params.payWayCode ? { payWayCode: params.payWayCode } : {}),
   };
   const bodyString = JSON.stringify(requestBody);

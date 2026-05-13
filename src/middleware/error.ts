@@ -23,9 +23,14 @@ export function errorHandler(
 
   if (err instanceof AlchemyApiError) {
     console.error('[alchemy]', err.code, err.message);
+    // Surface Alchemy's actual `returnMsg` to the client so the mobile
+    // can show a meaningful error and curl debugging works without
+    // hopping into Railway's log dashboard. Safe to do: Alchemy's
+    // messages are user-facing (e.g. "Amount must be ≥ 30 USD"), not
+    // server internals.
     res.status(502).json({
       error: 'upstream_error',
-      message: 'Onramp partner request failed.',
+      message: err.message,
       code: err.code,
     });
     return;
