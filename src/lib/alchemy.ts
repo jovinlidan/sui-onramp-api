@@ -275,15 +275,17 @@ export async function fetchQuote(params: {
 }): Promise<AlchemyQuote> {
   const url = new URL('/open/api/v4/merchant/order/quote', config.ALCHEMY_PAY_BASE_URL);
 
-  // Alchemy's merchant API V4 quote endpoint uses `amount` and `type` —
-  // distinct from the hosted-ramp URL which uses `fiatAmount` and
-  // `showTable`. Naming mismatch returns `10005 Invalid amount value`.
+  // Alchemy's merchant API V4 quote endpoint uses `amount` (not
+  // `fiatAmount` — that's the hosted-ramp URL convention) plus `side`
+  // (not `type`). Wrong key returns `10005 Invalid amount value` or
+  // `10005 Invalid side value` with the offending field named in the
+  // message.
   const requestBody: Record<string, unknown> = {
     crypto: params.crypto,
     network: params.network,
     fiat: params.fiat,
     amount: params.fiatAmount,
-    type: 'BUY',
+    side: 'BUY',
     ...(params.payWayCode ? { payWayCode: params.payWayCode } : {}),
   };
   // Use stable key ordering for both the bytes we send AND the bytes we
