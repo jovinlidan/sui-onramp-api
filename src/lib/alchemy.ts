@@ -179,9 +179,15 @@ export function buildHostedRampUrl(args: {
   fiatAmount: string;
   network: string;
   address?: string;
-  /** Alchemy payment-method code (e.g. `10001` for credit card). When set,
-      the hosted page lands directly on this method instead of showing the
-      method picker. Codes are returned per fiat from `/merchant/fiat/list`. */
+  /** Alchemy payment-method code (e.g. `10001` for credit card, `501` for
+      Apple Pay). When set, the hosted page skips the method-picker step
+      and lands directly on this method's form. Codes come from
+      `/merchant/fiat/list`.
+
+      Naming gotcha: the merchant API uses `payWayCode`, but the hosted
+      ramp page reads `redirectPayWayCode` (a separate param that
+      controls the "skip step 2" behavior). We pass both so future
+      Alchemy versions that converge the naming still work. */
   payWayCode?: string;
   redirectUrl?: string;
   callbackUrl?: string;
@@ -198,7 +204,13 @@ export function buildHostedRampUrl(args: {
     showTable: 'buy',
     timestamp,
     ...(args.address ? { address: args.address } : {}),
-    ...(args.payWayCode ? { payWayCode: args.payWayCode } : {}),
+    // `payWayCode` pre-highlights the method on step 2;
+    // `redirectPayWayCode` skips step 2 entirely. Hosted-ramp UX requires
+    // the latter — we pass both because Alchemy's docs cross-reference
+    // them inconsistently and unknown params get ignored.
+    ...(args.payWayCode
+      ? { payWayCode: args.payWayCode, redirectPayWayCode: args.payWayCode }
+      : {}),
     ...(args.redirectUrl ? { redirectUrl: args.redirectUrl } : {}),
     ...(args.callbackUrl ? { callbackUrl: args.callbackUrl } : {}),
   };
