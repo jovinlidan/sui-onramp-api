@@ -111,12 +111,18 @@ export async function fetchCryptoList(params: { fiat?: string }): Promise<Alchem
 }
 
 export class AlchemyApiError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-  ) {
+  // Explicit field + assignment instead of a constructor parameter property
+  // (`public readonly code: string` in the params). Node's
+  // `--experimental-strip-types` only strips type annotations — it can't
+  // transform code, so parameter properties (which would need a synthetic
+  // `this.code = code` in the body) throw `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`
+  // at runtime. Keep this pattern when adding error classes.
+  readonly code: string;
+
+  constructor(message: string, code: string) {
     super(message);
     this.name = 'AlchemyApiError';
+    this.code = code;
   }
 }
 
