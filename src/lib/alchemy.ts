@@ -18,18 +18,44 @@ function getPath(requestUrl: string): string {
 }
 
 /**
- * For GET requests body is the literal empty string `""`. For POST, callers
- * should pass the canonicalized JSON body string they're actually sending.
+ * Returns the body string that goes into the HMAC input. Empty string for
+ * GET (no body) and empty objects; otherwise the body's keys are sorted
+ * alphabetically and re-stringified.
+ *
+ * Key-sorting matters: Alchemy's reference signing code sorts the body
+ * before signing, so the signed bytes have a deterministic order
+ * independent of how the client constructed the object. If we sign an
+ * unsorted body but Alchemy verifies against a sorted-canonical form, the
+ * signature mismatches and the server returns `81003 Invalid Merchant
+ * Sign`. List/GET endpoints worked without this because they pass no body.
+ *
+ * Callers must also POST the **sorted** body bytes, not their original
+ * order — otherwise even with the sort here, the bytes the client sees and
+ * the bytes we sign won't match the bytes Alchemy receives. Use
+ * [stableJsonStringify] when building POST bodies.
  */
 function getJsonBody(body: string | undefined): string {
   if (!body) return '';
   try {
     const map = JSON.parse(body);
-    if (!map || Object.keys(map).length === 0) return '';
-    return JSON.stringify(map);
+    if (!map || typeof map !== 'object' || Object.keys(map).length === 0) return '';
+    return stableJsonStringify(map);
   } catch {
     return '';
   }
+}
+
+/**
+ * `JSON.stringify` with top-level keys sorted alphabetically. We don't
+ * recurse — Alchemy's request bodies are flat key→primitive maps in
+ * practice, and recursion would mask subtle bugs (e.g. arrays getting
+ * silently reordered) if a future endpoint sends nested data.
+ */
+function stableJsonStringify(obj: Record<string, unknown>): string {
+  const sortedKeys = Object.keys(obj).sort();
+  const sorted: Record<string, unknown> = {};
+  for (const k of sortedKeys) sorted[k] = obj[k];
+  return JSON.stringify(sorted);
 }
 
 export function signAlchemyRequest(args: {
@@ -249,21 +275,17 @@ export async function fetchQuote(params: {
 }): Promise<AlchemyQuote> {
   const url = new URL('/open/api/v4/merchant/order/quote', config.ALCHEMY_PAY_BASE_URL);
 
-  // Field naming gotcha: Alchemy's hosted-ramp URL takes `fiatAmount`, but
-  // the merchant API `/order/quote` endpoint takes `amount` (string). We
-  // pass both to be defensive — Alchemy ignores unknown keys, but the
-  // version-of-the-week shifts which key is canonical.
-  const requestBody = {
+  const requestBody: Record<string, unknown> = {
     crypto: params.crypto,
     network: params.network,
     fiat: params.fiat,
-    amount: params.fiatAmount,
     fiatAmount: params.fiatAmount,
     side: 'BUY',
-    type: 'BUY',
     ...(params.payWayCode ? { payWayCode: params.payWayCode } : {}),
   };
-  const bodyString = JSON.stringify(requestBody);
+  // Use stable key ordering for both the bytes we send AND the bytes we
+  // sign. Mismatch → Alchemy returns 81003 "Invalid Merchant Sign".
+  const bodyString = stableJsonStringify(requestBody);
 
   const auth = signAlchemyRequest({ method: 'POST', fullUrl: url.toString(), body: bodyString });
 
