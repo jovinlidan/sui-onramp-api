@@ -5,37 +5,17 @@ import { buildHostedRampUrl, fetchCryptoList, fetchFiatList, fetchQuote } from '
 
 const router = Router();
 
-/**
- * The literal value Alchemy Pay returns in the `network` field for Sui mainnet
- * coins. Verify against your merchant dashboard if Alchemy ever rebrands —
- * historical alternatives have included `SUI_NETWORK`. Keeping it isolated
- * here so the fix is one line.
- */
+/// Alchemy's `network` value for Sui mainnet — historical alts: `SUI_NETWORK`.
 const SUI_NETWORK = 'SUI';
 
-/**
- * Static fallback list used while the Alchemy merchant account is pending
- * activation. Enabled via `USE_STUB_CRYPTO_LIST=true` in `.env`. The shape
- * matches what the real Alchemy proxy returns, so the mobile client doesn't
- * need a different code path.
- *
- * Symbols are the lowercase names the mobile client's coin registry
- * exposes — the client resolves these to full Sui `coinType` strings by
- * joining against whichever metadata source it already pulls (e.g. a
- * lending-market pool list).
- */
+/// Static fallback served when `USE_STUB_CRYPTO_LIST=true`. Same shape as
+/// the live Alchemy response so the mobile client doesn't branch.
 const STUB_SUI_COINS = [
   { symbol: 'SUI', network: SUI_NETWORK },
   { symbol: 'USDC', network: SUI_NETWORK },
   { symbol: 'USDT', network: SUI_NETWORK },
 ];
 
-/**
- * Stand-in fiat list mirroring the shape `/buy/fiat-list` returns. Used when
- * `USE_STUB_CRYPTO_LIST=true`; keeps the mobile pill populated while Alchemy
- * activation is pending. Each fiat carries the payment methods Alchemy
- * typically supports for that currency, with plausible per-method limits.
- */
 const STUB_FIATS = [
   {
     code: 'USD',
@@ -76,13 +56,6 @@ const CryptoListQuery = z.object({
   fiat: z.string().length(3).optional(),
 });
 
-/**
- * GET /buy/crypto-list?fiat=USD
- *
- * Returns Sui-mainnet, buy-enabled cryptos. Source depends on the env flag:
- *   - `USE_STUB_CRYPTO_LIST=true`  → static list (dev fallback)
- *   - else                         → Alchemy Pay's `/merchant/crypto/list`
- */
 router.get('/crypto-list', async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (config.USE_STUB_CRYPTO_LIST) {
@@ -123,19 +96,6 @@ const FiatListQuery = z.object({
   type: z.enum(['BUY', 'SELL']).default('BUY'),
 });
 
-/**
- * GET /buy/fiat-list?type=BUY
- *
- * Returns the fiat currencies Alchemy Pay supports for the requested ramp
- * direction. Each currency carries its full list of payment methods
- * (`paymentMethods`) — credit/debit card, Apple Pay, SEPA, etc. — with
- * per-method limits and fees so the mobile can render a method picker and
- * pre-select one in the hosted ramp URL via `payWayCode`.
- *
- * Previously we collapsed the matrix to a single (min, max) per currency.
- * That hid the per-method floor — e.g. USDC-on-Sui requires ≥15 USD via
- * card, even though SEPA in EUR might allow far less.
- */
 router.get('/fiat-list', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const query = FiatListQuery.parse(req.query);
@@ -147,8 +107,7 @@ router.get('/fiat-list', async (req: Request, res: Response, next: NextFunction)
 
     const rows = await fetchFiatList({ type: query.type });
 
-    // Group payment-method rows by currency. One [BuyableFiatEntity]-shaped
-    // entry per currency, carrying the full method matrix Alchemy returned.
+    // Group payment-method rows by currency.
     const byCode = new Map<
       string,
       {
@@ -197,38 +156,17 @@ const QuoteBody = z.object({
   fiat: z.string().length(3),
   fiatAmount: z.string().regex(/^\d+(\.\d+)?$/, 'fiatAmount must be a decimal string'),
   network: z.string().default(SUI_NETWORK),
-  /** Optional Alchemy payment-method code (e.g. `10001` for credit card). */
   payWayCode: z.string().min(1).optional(),
 });
 
-/**
- * POST /buy/quote
- *
- * Live quote for a (crypto, fiat, network, amount) tuple. Mobile calls this
- * to:
- *   1. Surface the per-crypto minimum/maximum that the hosted page enforces
- *      (stricter than the per-fiat globals from `/fiat-list`).
- *   2. Render the "You receive ~ X CRYPTO" estimate before the user commits.
- *
- * Body is normalized — strings get parsed/typed downstream. The proxy
- * returns Alchemy's response data as-is so callers can pick whichever
- * fields they need without us churning when Alchemy adds new ones.
- *
- * In stub mode (`USE_STUB_CRYPTO_LIST=true`), we synthesize a plausible
- * quote from the requested amount so the mobile UI can be exercised
- * end-to-end without a live merchant.
- */
 router.post('/quote', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = QuoteBody.parse(req.body);
 
     if (config.USE_STUB_CRYPTO_LIST) {
       const fiatAmount = Number.parseFloat(body.fiatAmount);
-      // Plausible per-crypto floor for stub mode — matches what Alchemy
-      // sandbox commonly returns for USDC-on-Sui. Tweak as needed when
-      // exercising the UI for other cryptos.
       const stubPayMin = body.crypto === 'SUI' ? 30 : 15;
-      const stubPrice = body.crypto === 'SUI' ? 1.2 : 1.0; // arbitrary
+      const stubPrice = body.crypto === 'SUI' ? 1.2 : 1.0;
       const cryptoQuantity = fiatAmount > 0 ? (fiatAmount / stubPrice).toFixed(6) : '0';
       res.json({
         data: {
@@ -265,17 +203,6 @@ const OrderBody = z.object({
   callbackUrl: z.string().url().optional(),
 });
 
-/**
- * POST /buy/order
- *
- * Builds a SIGNED Alchemy Pay hosted-ramp URL for the mobile client to open
- * in an in-app browser. We use the hosted page (vs. the merchant API
- * createOrder + getToken flow) because it's the path of least friction for v1:
- * one signed URL, no per-user token, Alchemy handles checkout UI.
- *
- * The mobile client passes its recipient Sui address; we tack on a unique
- * `merchantOrderNo` per call (callers don't need to manage that themselves).
- */
 router.post('/order', (req: Request, res: Response, next: NextFunction) => {
   try {
     const body = OrderBody.parse(req.body);

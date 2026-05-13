@@ -1,13 +1,8 @@
 import { createHmac } from 'node:crypto';
 import { config } from '../config.ts';
 
-/**
- * Returns the path + alphabetically-sorted query string for a full URL.
- *
- * Literal port of Alchemy's reference `getPath()` from
- * https://alchemypay.readme.io/docs/api-sign — we keep the same shape so any
- * server-side reconstruction matches what we sign.
- */
+/// Path + alpha-sorted query string. Port of Alchemy's reference impl
+/// (https://alchemypay.readme.io/docs/api-sign).
 function getPath(requestUrl: string): string {
   const uri = new URL(requestUrl);
   const path = uri.pathname;
@@ -17,23 +12,9 @@ function getPath(requestUrl: string): string {
   return `${path}?${sorted.map(([k, v]) => `${k}=${v}`).join('&')}`;
 }
 
-/**
- * Returns the body string that goes into the HMAC input. Empty string for
- * GET (no body) and empty objects; otherwise the body's keys are sorted
- * alphabetically and re-stringified.
- *
- * Key-sorting matters: Alchemy's reference signing code sorts the body
- * before signing, so the signed bytes have a deterministic order
- * independent of how the client constructed the object. If we sign an
- * unsorted body but Alchemy verifies against a sorted-canonical form, the
- * signature mismatches and the server returns `81003 Invalid Merchant
- * Sign`. List/GET endpoints worked without this because they pass no body.
- *
- * Callers must also POST the **sorted** body bytes, not their original
- * order — otherwise even with the sort here, the bytes the client sees and
- * the bytes we sign won't match the bytes Alchemy receives. Use
- * [stableJsonStringify] when building POST bodies.
- */
+/// Body string for the HMAC input. Empty for GET / empty objects, else
+/// keys sorted alphabetically. Callers must also POST the sorted bytes —
+/// see [stableJsonStringify]. Unsorted body → 81003 Invalid Merchant Sign.
 function getJsonBody(body: string | undefined): string {
   if (!body) return '';
   try {
@@ -45,12 +26,8 @@ function getJsonBody(body: string | undefined): string {
   }
 }
 
-/**
- * `JSON.stringify` with top-level keys sorted alphabetically. We don't
- * recurse — Alchemy's request bodies are flat key→primitive maps in
- * practice, and recursion would mask subtle bugs (e.g. arrays getting
- * silently reordered) if a future endpoint sends nested data.
- */
+/// JSON.stringify with top-level keys sorted. Not recursive — Alchemy
+/// bodies are flat in practice, recursion would mask subtle bugs.
 function stableJsonStringify(obj: Record<string, unknown>): string {
   const sortedKeys = Object.keys(obj).sort();
   const sorted: Record<string, unknown> = {};
@@ -71,11 +48,8 @@ export function signAlchemyRequest(args: {
     .update(content, 'utf8')
     .digest('base64');
 
-  // Dev-only debug. Strip or gate behind an env flag once auth is stable.
   if (config.NODE_ENV !== 'production') {
     console.log('[alchemy-sign] content =', JSON.stringify(content));
-    console.log('[alchemy-sign] appId   =', config.ALCHEMY_PAY_APP_ID);
-    console.log('[alchemy-sign] ts      =', timestamp);
     console.log('[alchemy-sign] sign    =', sign);
   }
 
@@ -113,9 +87,6 @@ export async function fetchCryptoList(params: { fiat?: string }): Promise<Alchem
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      // Header names per the docs example — Alchemy expects the camelCase
-      // `appId` literal (HTTP normalizes case, but matching docs avoids
-      // any server-side strict comparison surprises).
       appId: auth.appId,
       timestamp: auth.timestamp,
       sign: auth.sign,
@@ -137,12 +108,10 @@ export async function fetchCryptoList(params: { fiat?: string }): Promise<Alchem
 }
 
 export class AlchemyApiError extends Error {
-  // Explicit field + assignment instead of a constructor parameter property
-  // (`public readonly code: string` in the params). Node's
-  // `--experimental-strip-types` only strips type annotations — it can't
-  // transform code, so parameter properties (which would need a synthetic
-  // `this.code = code` in the body) throw `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`
-  // at runtime. Keep this pattern when adding error classes.
+  // Explicit field + assignment, not a constructor parameter property —
+  // Node's --experimental-strip-types can't generate the synthetic
+  // assignment, so `constructor(public readonly code)` throws
+  // ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX at boot.
   readonly code: string;
 
   constructor(message: string, code: string) {
@@ -157,22 +126,16 @@ export class AlchemyApiError extends Error {
 const HOSTED_RAMP_PROD_BASE = 'https://ramp.alchemypay.org';
 const HOSTED_RAMP_SANDBOX_BASE = 'https://ramptest.alchemypay.org';
 
-/// Whether the current Alchemy base URL points at the test environment.
 function isSandbox(): boolean {
   return config.ALCHEMY_PAY_BASE_URL.includes('test');
 }
 
-/**
- * Builds a SIGNED Alchemy Pay hosted ramp page URL.
- *
- * The hosted page uses a different signing algorithm than the merchant API:
- *
- *   sortedQuery = "appId=...&crypto=...&fiat=...&...&timestamp=..."  (alpha-sorted)
- *   signInput   = timestamp + "GET" + "/index/rampPageBuy?" + sortedQuery
- *   sign        = base64(HMAC-SHA256(appSecret, signInput))
- *
- * Per https://alchemypay.readme.io/docs/ramp-signature-description.
- */
+/// Signed hosted-ramp URL. The hosted page uses a different signing
+/// algorithm than the merchant API: signInput = `${timestamp}GET/index/rampPageBuy?${sortedQuery}`.
+/// See https://alchemypay.readme.io/docs/ramp-signature-description.
+///
+/// No documented param skips the payment-method picker step — see
+/// https://alchemypay.readme.io/docs/on-ramp-custom-parameters.
 export function buildHostedRampUrl(args: {
   crypto: string;
   fiat: string;
@@ -183,11 +146,6 @@ export function buildHostedRampUrl(args: {
   callbackUrl?: string;
   merchantOrderNo: string;
 }): string {
-  // The hosted ramp URL has no documented parameter to pre-select or skip
-  // the payment-method step — see
-  // https://alchemypay.readme.io/docs/on-ramp-custom-parameters. Step 2
-  // of the hosted flow is mandatory, so we don't try to pass payWayCode
-  // here (it was silently ignored).
   const timestamp = Date.now().toString();
   const params: Record<string, string> = {
     appId: config.ALCHEMY_PAY_APP_ID,
@@ -203,7 +161,7 @@ export function buildHostedRampUrl(args: {
     ...(args.callbackUrl ? { callbackUrl: args.callbackUrl } : {}),
   };
 
-  // Alpha-sort, join as `k=v&k=v` (raw — no URL encoding inside the signed string).
+  // Alpha-sort, raw `k=v&k=v` (no URL encoding inside the signed string).
   const sortedQuery = Object.entries(params)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
@@ -215,71 +173,35 @@ export function buildHostedRampUrl(args: {
     .digest('base64');
 
   const base = isSandbox() ? HOSTED_RAMP_SANDBOX_BASE : HOSTED_RAMP_PROD_BASE;
-  // Browser URL uses URL-encoded values; the sign carries through unchanged.
   const finalParams = new URLSearchParams({ ...params, sign });
   return `${base}/?${finalParams.toString()}`;
 }
 
 // ─── Quote ───────────────────────────────────────────────────────────────────
 
-/**
- * Raw response from Alchemy's quote endpoint. Fields are strings to match
- * the wire format — callers parse to numbers downstream. We type as
- * optional everywhere because Alchemy's response shape has shifted across
- * doc versions (some keys are sometimes nested, sometimes flat).
- */
 export interface AlchemyQuote {
   crypto?: string;
   network?: string;
   fiat?: string;
-  /** Unit price of one crypto unit in fiat (e.g. `1.0014`). */
   cryptoPrice?: string;
-  /** Fiat input echoed back. */
-  fiatQuantity?: string;
-  /** Estimated crypto the user receives after fees. */
   cryptoQuantity?: string;
-  /** Per-crypto-per-payment-method minimum spend in fiat. */
-  payMin?: string;
-  /** Per-crypto-per-payment-method maximum spend in fiat. */
-  payMax?: string;
-  /** Provider/processing fee in fiat. */
   rampFee?: string;
-  /** Estimated on-chain gas fee in fiat. */
   networkFee?: string;
-  /** Payment-method identifier (e.g. `10001` for credit card). */
   payWayCode?: string;
-  /** Epoch seconds when the quote expires (~30s typical). */
-  rateValidUntil?: number;
 }
 
-/**
- * Calls Alchemy Pay's order quote endpoint:
- *
- *   POST /open/api/v4/merchant/order/quote
- *
- * Returns the live exchange rate, estimated crypto received, fees, and the
- * **per-crypto minimum/maximum spend** that the hosted page enforces. This
- * minimum is stricter than the global per-fiat `payMin` from `/fiat/list` —
- * e.g. USD orders globally start at 1 USD but USDC-on-Sui orders start at
- * 15 USD. We surface this to the mobile so validation matches the hosted
- * page's actual floor.
- */
+/// POST /open/api/v4/merchant/order/quote. Body keys: `amount` (not
+/// `fiatAmount`, that's hosted-ramp), `side` (not `type`). Wrong keys
+/// return 10005 with the offending field in the message.
 export async function fetchQuote(params: {
   crypto: string;
   network: string;
   fiat: string;
   fiatAmount: string;
-  /** Optional Alchemy payment-method code. When set, the quote is scoped to
-      that method's specific rate, fees, and per-method limits. */
   payWayCode?: string;
 }): Promise<AlchemyQuote> {
   const url = new URL('/open/api/v4/merchant/order/quote', config.ALCHEMY_PAY_BASE_URL);
 
-  // Alchemy's merchant API V4 quote endpoint uses `amount` (not
-  // `fiatAmount` — that's the hosted-ramp URL convention) plus `side`
-  // (not `type`). Wrong key returns `10005 Invalid amount value` or
-  // `10005 Invalid side value` with the offending field named in the
-  // message.
   const requestBody: Record<string, unknown> = {
     crypto: params.crypto,
     network: params.network,
@@ -288,8 +210,7 @@ export async function fetchQuote(params: {
     side: 'BUY',
     ...(params.payWayCode ? { payWayCode: params.payWayCode } : {}),
   };
-  // Use stable key ordering for both the bytes we send AND the bytes we
-  // sign. Mismatch → Alchemy returns 81003 "Invalid Merchant Sign".
+  // Stable key order for both sent + signed bytes; mismatch → 81003.
   const bodyString = stableJsonStringify(requestBody);
 
   const auth = signAlchemyRequest({ method: 'POST', fullUrl: url.toString(), body: bodyString });
@@ -321,12 +242,8 @@ export async function fetchQuote(params: {
 
 // ─── Fiat List ───────────────────────────────────────────────────────────────
 
-/**
- * Raw row Alchemy returns from `/merchant/fiat/list`. Each currency typically
- * has multiple rows — one per payment method (`payWayCode`). Downstream code
- * de-dupes to a unique-currency list for the fiat picker, then keeps the
- * payment-method rows for the create-order step where they're needed.
- */
+/// One row per (currency, payWayCode). Downstream dedupes to unique
+/// currencies but keeps the per-method rows nested for the picker.
 export interface AlchemyFiatRow {
   currency: string;
   country: string;
@@ -339,14 +256,6 @@ export interface AlchemyFiatRow {
   payMax: number;
 }
 
-/**
- * Calls Alchemy Pay's Fiat Query endpoint.
- *
- *   GET /open/api/v4/merchant/fiat/list?type=BUY
- *
- * `type` defaults to `BUY` (onramp). The endpoint has no crypto/network
- * filter — it returns every fiat the merchant is enabled for.
- */
 export async function fetchFiatList(params: {
   type?: 'BUY' | 'SELL';
 }): Promise<AlchemyFiatRow[]> {
