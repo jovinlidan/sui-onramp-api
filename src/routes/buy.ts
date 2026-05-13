@@ -297,6 +297,14 @@ router.post('/order', (req: Request, res: Response, next: NextFunction) => {
       merchantOrderNo,
     });
 
+    // Log the full hosted-ramp URL on every /buy/order call so the Railway
+    // dashboard surfaces it. Lets us paste a URL into a desktop browser to
+    // verify what Alchemy receives without having to instrument the mobile.
+    // The URL contains no merchant secrets (the sign is HMAC output, not
+    // recoverable to the key) — safe to log.
+    console.log('[buy-order]', merchantOrderNo, 'payWayCode=', body.payWayCode ?? '(none)');
+    console.log('[buy-order-url]', url);
+
     res.json({ data: { url, merchantOrderNo } });
   } catch (err) {
     next(err);
