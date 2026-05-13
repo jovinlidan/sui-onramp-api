@@ -179,20 +179,15 @@ export function buildHostedRampUrl(args: {
   fiatAmount: string;
   network: string;
   address?: string;
-  /** Alchemy payment-method code (e.g. `10001` for credit card, `501` for
-      Apple Pay). When set, the hosted page skips the method-picker step
-      and lands directly on this method's form. Codes come from
-      `/merchant/fiat/list`.
-
-      Naming gotcha: the merchant API uses `payWayCode`, but the hosted
-      ramp page reads `redirectPayWayCode` (a separate param that
-      controls the "skip step 2" behavior). We pass both so future
-      Alchemy versions that converge the naming still work. */
-  payWayCode?: string;
   redirectUrl?: string;
   callbackUrl?: string;
   merchantOrderNo: string;
 }): string {
+  // The hosted ramp URL has no documented parameter to pre-select or skip
+  // the payment-method step — see
+  // https://alchemypay.readme.io/docs/on-ramp-custom-parameters. Step 2
+  // of the hosted flow is mandatory, so we don't try to pass payWayCode
+  // here (it was silently ignored).
   const timestamp = Date.now().toString();
   const params: Record<string, string> = {
     appId: config.ALCHEMY_PAY_APP_ID,
@@ -204,13 +199,6 @@ export function buildHostedRampUrl(args: {
     showTable: 'buy',
     timestamp,
     ...(args.address ? { address: args.address } : {}),
-    // `payWayCode` pre-highlights the method on step 2;
-    // `redirectPayWayCode` skips step 2 entirely. Hosted-ramp UX requires
-    // the latter — we pass both because Alchemy's docs cross-reference
-    // them inconsistently and unknown params get ignored.
-    ...(args.payWayCode
-      ? { payWayCode: args.payWayCode, redirectPayWayCode: args.payWayCode }
-      : {}),
     ...(args.redirectUrl ? { redirectUrl: args.redirectUrl } : {}),
     ...(args.callbackUrl ? { callbackUrl: args.callbackUrl } : {}),
   };

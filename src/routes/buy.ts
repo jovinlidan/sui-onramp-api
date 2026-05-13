@@ -261,10 +261,6 @@ const OrderBody = z.object({
   fiatAmount: z.string().regex(/^\d+(\.\d+)?$/, 'fiatAmount must be a decimal string'),
   network: z.string().default(SUI_NETWORK),
   address: z.string().min(1, 'address (recipient Sui wallet) is required'),
-  /** Optional Alchemy payment-method code — pre-selects the method on the
-      hosted ramp page (e.g. `10001` for credit card, `701` for Apple Pay).
-      Omit to let Alchemy present the full picker. */
-  payWayCode: z.string().min(1).optional(),
   redirectUrl: z.string().url().optional(),
   callbackUrl: z.string().url().optional(),
 });
@@ -291,19 +287,10 @@ router.post('/order', (req: Request, res: Response, next: NextFunction) => {
       fiatAmount: body.fiatAmount,
       network: body.network,
       address: body.address,
-      payWayCode: body.payWayCode,
       redirectUrl: body.redirectUrl,
       callbackUrl: body.callbackUrl,
       merchantOrderNo,
     });
-
-    // Log the full hosted-ramp URL on every /buy/order call so the Railway
-    // dashboard surfaces it. Lets us paste a URL into a desktop browser to
-    // verify what Alchemy receives without having to instrument the mobile.
-    // The URL contains no merchant secrets (the sign is HMAC output, not
-    // recoverable to the key) — safe to log.
-    console.log('[buy-order]', merchantOrderNo, 'payWayCode=', body.payWayCode ?? '(none)');
-    console.log('[buy-order-url]', url);
 
     res.json({ data: { url, merchantOrderNo } });
   } catch (err) {
