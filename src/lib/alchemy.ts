@@ -1,5 +1,5 @@
-import { createHmac } from 'node:crypto';
-import { config } from '../config.ts';
+import { createHmac } from "node:crypto";
+import { config } from "../config.ts";
 
 /// Path + alpha-sorted query string. Port of Alchemy's reference impl
 /// (https://alchemypay.readme.io/docs/api-sign).
@@ -9,20 +9,21 @@ function getPath(requestUrl: string): string {
   const params = Array.from(uri.searchParams.entries());
   if (params.length === 0) return path;
   const sorted = [...params].sort(([a], [b]) => a.localeCompare(b));
-  return `${path}?${sorted.map(([k, v]) => `${k}=${v}`).join('&')}`;
+  return `${path}?${sorted.map(([k, v]) => `${k}=${v}`).join("&")}`;
 }
 
 /// Body string for the HMAC input. Empty for GET / empty objects, else
 /// keys sorted alphabetically. Callers must also POST the sorted bytes —
 /// see [stableJsonStringify]. Unsorted body → 81003 Invalid Merchant Sign.
 function getJsonBody(body: string | undefined): string {
-  if (!body) return '';
+  if (!body) return "";
   try {
     const map = JSON.parse(body);
-    if (!map || typeof map !== 'object' || Object.keys(map).length === 0) return '';
+    if (!map || typeof map !== "object" || Object.keys(map).length === 0)
+      return "";
     return stableJsonStringify(map);
   } catch {
-    return '';
+    return "";
   }
 }
 
@@ -36,21 +37,24 @@ function stableJsonStringify(obj: Record<string, unknown>): string {
 }
 
 export function signAlchemyRequest(args: {
-  method: 'GET' | 'POST';
+  method: "GET" | "POST";
   fullUrl: string;
   body?: string;
 }): { sign: string; timestamp: string; appId: string } {
   const timestamp = Date.now().toString();
   const content =
-    timestamp + args.method.toUpperCase() + getPath(args.fullUrl) + getJsonBody(args.body);
+    timestamp +
+    args.method.toUpperCase() +
+    getPath(args.fullUrl) +
+    getJsonBody(args.body);
 
-  const sign = createHmac('sha256', config.ALCHEMY_PAY_APP_SECRET)
-    .update(content, 'utf8')
-    .digest('base64');
+  const sign = createHmac("sha256", config.ALCHEMY_PAY_APP_SECRET)
+    .update(content, "utf8")
+    .digest("base64");
 
-  if (config.NODE_ENV !== 'production') {
-    console.log('[alchemy-sign] content =', JSON.stringify(content));
-    console.log('[alchemy-sign] sign    =', sign);
+  if (config.NODE_ENV !== "production") {
+    console.log("[alchemy-sign] content =", JSON.stringify(content));
+    console.log("[alchemy-sign] sign    =", sign);
   }
 
   return { sign, timestamp, appId: config.ALCHEMY_PAY_APP_ID };
@@ -77,16 +81,21 @@ interface AlchemyEnvelope<T> {
   data?: T;
 }
 
-export async function fetchCryptoList(params: { fiat?: string }): Promise<AlchemyCryptoAsset[]> {
-  const url = new URL('/open/api/v4/merchant/crypto/list', config.ALCHEMY_PAY_BASE_URL);
-  if (params.fiat) url.searchParams.set('fiat', params.fiat);
+export async function fetchCryptoList(params: {
+  fiat?: string;
+}): Promise<AlchemyCryptoAsset[]> {
+  const url = new URL(
+    "/open/api/v4/merchant/crypto/list",
+    config.ALCHEMY_PAY_BASE_URL,
+  );
+  if (params.fiat) url.searchParams.set("fiat", params.fiat);
 
-  const auth = signAlchemyRequest({ method: 'GET', fullUrl: url.toString() });
+  const auth = signAlchemyRequest({ method: "GET", fullUrl: url.toString() });
 
   const res = await fetch(url, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       appId: auth.appId,
       timestamp: auth.timestamp,
       sign: auth.sign,
@@ -94,8 +103,8 @@ export async function fetchCryptoList(params: { fiat?: string }): Promise<Alchem
   });
 
   const body = (await res.json()) as AlchemyEnvelope<AlchemyCryptoAsset[]>;
-  if (config.NODE_ENV !== 'production') {
-    console.log('[alchemy-resp]', res.status, body.returnCode, body.returnMsg);
+  if (config.NODE_ENV !== "production") {
+    console.log("[alchemy-resp]", res.status, body.returnCode, body.returnMsg);
   }
 
   if (!res.ok || body.success === false) {
@@ -116,18 +125,18 @@ export class AlchemyApiError extends Error {
 
   constructor(message: string, code: string) {
     super(message);
-    this.name = 'AlchemyApiError';
+    this.name = "AlchemyApiError";
     this.code = code;
   }
 }
 
 // ─── Hosted Ramp URL ─────────────────────────────────────────────────────────
 
-const HOSTED_RAMP_PROD_BASE = 'https://ramp.alchemypay.org';
-const HOSTED_RAMP_SANDBOX_BASE = 'https://ramptest.alchemypay.org';
+const HOSTED_RAMP_PROD_BASE = "https://ramp.alchemypay.org";
+const HOSTED_RAMP_SANDBOX_BASE = "https://ramptest.alchemypay.org";
 
 function isSandbox(): boolean {
-  return config.ALCHEMY_PAY_BASE_URL.includes('test');
+  return config.ALCHEMY_PAY_BASE_URL.includes("test");
 }
 
 /// Signed hosted-ramp URL. The hosted page uses a different signing
@@ -151,7 +160,7 @@ export function buildHostedRampUrl(args: {
   redirectUrl?: string;
   callbackUrl?: string;
   merchantOrderNo: string;
-  side?: 'buy' | 'sell';
+  side?: "buy" | "sell";
 }): string {
   const timestamp = Date.now().toString();
   const params: Record<string, string> = {
@@ -159,7 +168,7 @@ export function buildHostedRampUrl(args: {
     crypto: args.crypto,
     merchantOrderNo: args.merchantOrderNo,
     network: args.network,
-    showTable: args.side ?? 'buy',
+    showTable: args.side ?? "buy",
     timestamp,
     ...(args.fiat ? { fiat: args.fiat } : {}),
     ...(args.fiatAmount ? { fiatAmount: args.fiatAmount } : {}),
@@ -173,12 +182,14 @@ export function buildHostedRampUrl(args: {
   const sortedQuery = Object.entries(params)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}=${v}`)
-    .join('&');
+    .join("&");
 
-  const signInput = `${timestamp}GET/index/rampPageBuy?${sortedQuery}`;
-  const sign = createHmac('sha256', config.ALCHEMY_PAY_APP_SECRET)
-    .update(signInput, 'utf8')
-    .digest('base64');
+  const signPath =
+    args.side === "sell" ? "/index/rampPageSell" : "/index/rampPageBuy";
+  const signInput = `${timestamp}GET${signPath}?${sortedQuery}`;
+  const sign = createHmac("sha256", config.ALCHEMY_PAY_APP_SECRET)
+    .update(signInput, "utf8")
+    .digest("base64");
 
   const base = isSandbox() ? HOSTED_RAMP_SANDBOX_BASE : HOSTED_RAMP_PROD_BASE;
   const finalParams = new URLSearchParams({ ...params, sign });
@@ -207,27 +218,34 @@ export async function fetchQuote(params: {
   fiat: string;
   fiatAmount: string;
   payWayCode?: string;
-  side?: 'BUY' | 'SELL';
+  side?: "BUY" | "SELL";
 }): Promise<AlchemyQuote> {
-  const url = new URL('/open/api/v4/merchant/order/quote', config.ALCHEMY_PAY_BASE_URL);
+  const url = new URL(
+    "/open/api/v4/merchant/order/quote",
+    config.ALCHEMY_PAY_BASE_URL,
+  );
 
   const requestBody: Record<string, unknown> = {
     crypto: params.crypto,
     network: params.network,
     fiat: params.fiat,
     amount: params.fiatAmount,
-    side: params.side ?? 'BUY',
+    side: params.side ?? "BUY",
     ...(params.payWayCode ? { payWayCode: params.payWayCode } : {}),
   };
   // Stable key order for both sent + signed bytes; mismatch → 81003.
   const bodyString = stableJsonStringify(requestBody);
 
-  const auth = signAlchemyRequest({ method: 'POST', fullUrl: url.toString(), body: bodyString });
+  const auth = signAlchemyRequest({
+    method: "POST",
+    fullUrl: url.toString(),
+    body: bodyString,
+  });
 
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       appId: auth.appId,
       timestamp: auth.timestamp,
       sign: auth.sign,
@@ -236,8 +254,8 @@ export async function fetchQuote(params: {
   });
 
   const body = (await res.json()) as AlchemyEnvelope<AlchemyQuote>;
-  if (config.NODE_ENV !== 'production') {
-    console.log('[alchemy-resp]', res.status, body.returnCode, body.returnMsg);
+  if (config.NODE_ENV !== "production") {
+    console.log("[alchemy-resp]", res.status, body.returnCode, body.returnMsg);
   }
 
   if (!res.ok || body.success === false) {
@@ -266,17 +284,20 @@ export interface AlchemyFiatRow {
 }
 
 export async function fetchFiatList(params: {
-  type?: 'BUY' | 'SELL';
+  type?: "BUY" | "SELL";
 }): Promise<AlchemyFiatRow[]> {
-  const url = new URL('/open/api/v4/merchant/fiat/list', config.ALCHEMY_PAY_BASE_URL);
-  url.searchParams.set('type', params.type ?? 'BUY');
+  const url = new URL(
+    "/open/api/v4/merchant/fiat/list",
+    config.ALCHEMY_PAY_BASE_URL,
+  );
+  url.searchParams.set("type", params.type ?? "BUY");
 
-  const auth = signAlchemyRequest({ method: 'GET', fullUrl: url.toString() });
+  const auth = signAlchemyRequest({ method: "GET", fullUrl: url.toString() });
 
   const res = await fetch(url, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       appId: auth.appId,
       timestamp: auth.timestamp,
       sign: auth.sign,
@@ -284,8 +305,8 @@ export async function fetchFiatList(params: {
   });
 
   const body = (await res.json()) as AlchemyEnvelope<AlchemyFiatRow[]>;
-  if (config.NODE_ENV !== 'production') {
-    console.log('[alchemy-resp]', res.status, body.returnCode, body.returnMsg);
+  if (config.NODE_ENV !== "production") {
+    console.log("[alchemy-resp]", res.status, body.returnCode, body.returnMsg);
   }
 
   if (!res.ok || body.success === false) {
