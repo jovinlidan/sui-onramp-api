@@ -76,7 +76,7 @@ router.get('/crypto-list', async (req: Request, res: Response, next: NextFunctio
     const assets = await fetchCryptoList({ fiat: query.fiat });
 
     const result = assets
-      .filter((a) => a.network === SUI_NETWORK && (a.buyEnable === 1 || a.sellEnable === 1))
+      .filter((a) => a.network === SUI_NETWORK && a.buyEnable === 1)
       .map((a) => ({
         symbol: a.crypto,
         network: a.network,
@@ -84,8 +84,6 @@ router.get('/crypto-list', async (req: Request, res: Response, next: NextFunctio
         icon: a.icon ?? null,
         minPurchaseAmount: a.minPurchaseAmount,
         maxPurchaseAmount: a.maxPurchaseAmount,
-        canBuy: a.buyEnable === 1,
-        canSell: a.sellEnable === 1,
       }));
 
     res.json({ data: result });
