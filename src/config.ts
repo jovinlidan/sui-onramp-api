@@ -8,7 +8,7 @@ const Schema = z.object({
   ALCHEMY_PAY_BASE_URL: z
     .string()
     .url()
-    .default('https://openapi-test.alchemypay.org'),
+    .default('https://openapi.alchemypay.org'),
   USE_STUB_CRYPTO_LIST: z
     .string()
     .transform((v) => v === 'true' || v === '1')
