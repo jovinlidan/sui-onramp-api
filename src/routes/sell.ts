@@ -16,10 +16,11 @@ const QuoteBody = z.object({
   payWayCode: z.string().min(1).optional(),
 });
 
+/// Sell orders specify the amount of crypto to sell, not the fiat to
+/// receive — that's what Alchemy's hosted off-ramp page reads.
 const OrderBody = z.object({
   crypto: z.string().min(1),
-  fiat: z.string().length(3),
-  fiatAmount: z.string().regex(/^\d+(\.\d+)?$/, 'fiatAmount must be a decimal string'),
+  cryptoAmount: z.string().regex(/^\d+(\.\d+)?$/, 'cryptoAmount must be a decimal string'),
   network: z.string().default(SUI_NETWORK),
   address: z.string().min(1, 'address (source Sui wallet) is required'),
   redirectUrl: z.string().url().optional(),
@@ -51,8 +52,7 @@ router.post('/order', (req: Request, res: Response, next: NextFunction) => {
     const merchantOrderNo = `sui-offramp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const url = buildHostedRampUrl({
       crypto: body.crypto,
-      fiat: body.fiat,
-      fiatAmount: body.fiatAmount,
+      cryptoAmount: body.cryptoAmount,
       network: body.network,
       address: body.address,
       redirectUrl: body.redirectUrl,

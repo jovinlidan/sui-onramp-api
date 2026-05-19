@@ -136,11 +136,17 @@ function isSandbox(): boolean {
 ///
 /// No documented param skips the payment-method picker step — see
 /// https://alchemypay.readme.io/docs/on-ramp-custom-parameters.
+/// Alchemy's hosted ramp uses different amount params per side. Buy
+/// takes `fiatAmount` (what the user pays); sell takes `cryptoAmount`
+/// (what they're selling). Sell also ignores `fiat` unless paired with
+/// `country`, so we omit fiat there and let the page handle payout
+/// selection. See https://alchemypay.readme.io/docs/off-ramp-custom-parameters.
 export function buildHostedRampUrl(args: {
   crypto: string;
-  fiat: string;
-  fiatAmount: string;
   network: string;
+  fiat?: string;
+  fiatAmount?: string;
+  cryptoAmount?: string;
   address?: string;
   redirectUrl?: string;
   callbackUrl?: string;
@@ -151,12 +157,13 @@ export function buildHostedRampUrl(args: {
   const params: Record<string, string> = {
     appId: config.ALCHEMY_PAY_APP_ID,
     crypto: args.crypto,
-    fiat: args.fiat,
-    fiatAmount: args.fiatAmount,
     merchantOrderNo: args.merchantOrderNo,
     network: args.network,
     showTable: args.side ?? 'buy',
     timestamp,
+    ...(args.fiat ? { fiat: args.fiat } : {}),
+    ...(args.fiatAmount ? { fiatAmount: args.fiatAmount } : {}),
+    ...(args.cryptoAmount ? { cryptoAmount: args.cryptoAmount } : {}),
     ...(args.address ? { address: args.address } : {}),
     ...(args.redirectUrl ? { redirectUrl: args.redirectUrl } : {}),
     ...(args.callbackUrl ? { callbackUrl: args.callbackUrl } : {}),
