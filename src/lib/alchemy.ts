@@ -145,6 +145,7 @@ export function buildHostedRampUrl(args: {
   redirectUrl?: string;
   callbackUrl?: string;
   merchantOrderNo: string;
+  side?: 'buy' | 'sell';
 }): string {
   const timestamp = Date.now().toString();
   const params: Record<string, string> = {
@@ -154,7 +155,7 @@ export function buildHostedRampUrl(args: {
     fiatAmount: args.fiatAmount,
     merchantOrderNo: args.merchantOrderNo,
     network: args.network,
-    showTable: 'buy',
+    showTable: args.side ?? 'buy',
     timestamp,
     ...(args.address ? { address: args.address } : {}),
     ...(args.redirectUrl ? { redirectUrl: args.redirectUrl } : {}),
@@ -199,6 +200,7 @@ export async function fetchQuote(params: {
   fiat: string;
   fiatAmount: string;
   payWayCode?: string;
+  side?: 'BUY' | 'SELL';
 }): Promise<AlchemyQuote> {
   const url = new URL('/open/api/v4/merchant/order/quote', config.ALCHEMY_PAY_BASE_URL);
 
@@ -207,7 +209,7 @@ export async function fetchQuote(params: {
     network: params.network,
     fiat: params.fiat,
     amount: params.fiatAmount,
-    side: 'BUY',
+    side: params.side ?? 'BUY',
     ...(params.payWayCode ? { payWayCode: params.payWayCode } : {}),
   };
   // Stable key order for both sent + signed bytes; mismatch → 81003.

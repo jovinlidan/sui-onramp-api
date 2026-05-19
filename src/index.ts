@@ -1,6 +1,7 @@
 import express from 'express';
 import { config } from './config.ts';
 import { buyRouter } from './routes/buy.ts';
+import { sellRouter } from './routes/sell.ts';
 import { errorHandler } from './middleware/error.ts';
 
 const app = express();
@@ -17,6 +18,7 @@ app.get('/healthz', (_req, res) => {
 });
 
 app.use('/buy', buyRouter);
+app.use('/sell', sellRouter);
 
 app.use(errorHandler);
 
