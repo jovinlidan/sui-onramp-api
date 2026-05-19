@@ -156,6 +156,7 @@ export function buildHostedRampUrl(args: {
   fiat?: string;
   fiatAmount?: string;
   cryptoAmount?: string;
+  country?: string;
   address?: string;
   redirectUrl?: string;
   callbackUrl?: string;
@@ -173,6 +174,7 @@ export function buildHostedRampUrl(args: {
     ...(args.fiat ? { fiat: args.fiat } : {}),
     ...(args.fiatAmount ? { fiatAmount: args.fiatAmount } : {}),
     ...(args.cryptoAmount ? { cryptoAmount: args.cryptoAmount } : {}),
+    ...(args.country ? { country: args.country } : {}),
     ...(args.address ? { address: args.address } : {}),
     ...(args.redirectUrl ? { redirectUrl: args.redirectUrl } : {}),
     ...(args.callbackUrl ? { callbackUrl: args.callbackUrl } : {}),
