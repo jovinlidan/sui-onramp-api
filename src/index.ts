@@ -22,6 +22,13 @@ app.use(errorHandler);
 
 const server = app.listen(config.PORT, () => {
   console.log(`[onramp-api] listening on :${config.PORT} (${config.NODE_ENV})`);
+  // One-shot egress-IP probe — Alchemy Pay requires the caller IP to be
+  // whitelisted on prod. Log it on every boot so the IP for the current
+  // deployment is visible without exec'ing into the container.
+  fetch('https://api.ipify.org')
+    .then((r) => r.text())
+    .then((ip) => console.log(`[egress-ip] ${ip.trim()}`))
+    .catch((e) => console.warn('[egress-ip] probe failed:', e));
 });
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
